@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>iPark AI Assistant</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      background: #F7F3EE;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+    .header {
+      background: #7B1C2E;
+      padding: 14px 20px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .header-dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      background: #C49A3C;
+    }
+    .header h1 {
+      color: white;
+      font-size: 16px;
+      font-weight: 600;
+    }
+    .header p {
+      color: rgba(255,255,255,0.55);
+      font-size: 11px;
+      margin-top: 2px;
+    }
+    .chat-area {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .message {
+      max-width: 80%;
+      padding: 12px 16px;
+      border-radius: 12px;
+      font-size: 13.5px;
+      line-height: 1.6;
+    }
+    .message.user {
+      background: #7B1C2E;
+      color: white;
+      align-self: flex-end;
+      border-bottom-right-radius: 4px;
+    }
+    .message.bot {
+      background: white;
+      color: #1A1A1A;
+      align-self: flex-start;
+      border-bottom-left-radius: 4px;
+      border: 1px solid #E8E0D8;
+    }
+    .message.bot.loading {
+      color: #8B7355;
+      font-style: italic;
+    }
+    .suggestions {
+      padding: 0 20px 12px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .suggestion {
+      background: white;
+      border: 1px solid #E8E0D8;
+      border-radius: 20px;
+      padding: 6px 14px;
+      font-size: 12px;
+      color: #7B1C2E;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .suggestion:hover {
+      background: #7B1C2E;
+      color: white;
+      border-color: #7B1C2E;
+    }
+    .input-area {
+      padding: 14px 20px;
+      background: white;
+      border-top: 1px solid #E8E0D8;
+      display: flex;
+      gap: 10px;
+    }
+    .input-area input {
+      flex: 1;
+      padding: 10px 16px;
+      border: 1px solid #E8E0D8;
+      border-radius: 24px;
+      font-size: 13.5px;
+      outline: none;
+      background: #F7F3EE;
+      color: #1A1A1A;
+    }
+    .input-area input:focus {
+      border-color: #7B1C2E;
+    }
+    .input-area button {
+      background: #7B1C2E;
+      color: white;
+      border: none;
+      border-radius: 24px;
+      padding: 10px 20px;
+      font-size: 13px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: background 0.2s;
+    }
+    .input-area button:hover { background: #5A1220; }
+    .input-area button:disabled { background: #C8B0B8; cursor: not-allowed; }
+    .welcome {
+      text-align: center;
+      padding: 30px 20px;
+      color: #8B7355;
+    }
+    .welcome h2 { color: #7B1C2E; font-size: 18px; margin-bottom: 8px; }
+    .welcome p { font-size: 13px; line-height: 1.6; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <h1>iPark AI Assistant</h1>
+      <p>Powered by GPT-4o · Ask anything about startups & innovation</p>
+    </div>
+    <div class="header-dot" style="margin-left:auto"></div>
+  </div>
+
+  <div class="chat-area" id="chatArea">
+    <div class="welcome">
+      <h2>Hello! How can I help you today?</h2>
+      <p>I can answer questions about startups, entrepreneurship,<br>industry trends, funding, and innovation in the MENA region.</p>
+    </div>
+  </div>
+
+  <div class="suggestions" id="suggestions">
+    <div class="suggestion" onclick="sendSuggestion(this)">How do I validate my startup idea?</div>
+    <div class="suggestion" onclick="sendSuggestion(this)">What are top funded sectors in MENA 2025?</div>
+    <div class="suggestion" onclick="sendSuggestion(this)">How do I pitch to investors?</div>
+    <div class="suggestion" onclick="sendSuggestion(this)">What makes a startup successful?</div>
+  </div>
+
+  <div class="input-area">
+    <input type="text" id="userInput" placeholder="Ask me anything about startups and innovation..." />
+    <button id="sendBtn" onclick="sendMessage()">Send</button>
+  </div>
+
+  <script>
+    const chatArea = document.getElementById('chatArea');
+    const userInput = document.getElementById('userInput');
+    const sendBtn = document.getElementById('sendBtn');
+    const suggestions = document.getElementById('suggestions');
+    const history = [];
+
+    userInput.addEventListener('keydown', e => { if (e.key === 'Enter') sendMessage(); });
+
+    function sendSuggestion(el) {
+      userInput.value = el.textContent;
+      sendMessage();
+    }
+
+    function appendMessage(text, type) {
+      const div = document.createElement('div');
+      div.className = `message ${type}`;
+      div.textContent = text;
+      chatArea.appendChild(div);
+      chatArea.scrollTop = chatArea.scrollHeight;
+      return div;
+    }
+
+    async function sendMessage() {
+      const text = userInput.value.trim();
+      if (!text) return;
+
+      suggestions.style.display = 'none';
+      document.querySelector('.welcome') && document.querySelector('.welcome').remove();
+
+      appendMessage(text, 'user');
+      history.push({ role: 'user', content: text });
+      userInput.value = '';
+      sendBtn.disabled = true;
+
+      const loading = appendMessage('Thinking...', 'bot loading');
+
+      try {
+        const res = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ messages: history })
+        });
+        const data = await res.json();
+        const reply = data.reply || 'Sorry, something went wrong.';
+        loading.className = 'message bot';
+        loading.textContent = reply;
+        history.push({ role: 'assistant', content: reply });
+      } catch {
+        loading.className = 'message bot';
+        loading.textContent = 'Sorry, something went wrong. Please try again.';
+      }
+
+      sendBtn.disabled = false;
+      chatArea.scrollTop = chatArea.scrollHeight;
+    }
+  </script>
+</body>
+</html>
