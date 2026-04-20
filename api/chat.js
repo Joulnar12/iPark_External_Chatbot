@@ -1,4 +1,4 @@
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const { messages } = req.body;
@@ -12,10 +12,10 @@ You specialize in:
 - Funding, investment, and venture capital
 - Tech industry trends and innovation
 - MENA startup ecosystem insights
-- Business models, go-to-market strategies
+- Business models and go-to-market strategies
 - Leadership, team building, and product development
 
-Keep answers concise, practical, and encouraging. Use clear language. When relevant, reference the MENA/Lebanon context.
+Keep answers concise, practical, and encouraging. When relevant, reference the MENA/Lebanon context.
 Do not discuss internal iPark operations, confidential data, or internal roadmap details.`;
 
   try {
