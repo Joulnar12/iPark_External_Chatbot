@@ -10,10 +10,8 @@ module.exports = async function handler(req, res) {
   const SHEET_ID = '1A1ZX47YDtwENEfa6N35VgSLgT3579OHBYlhQ-ovSCeo';
   const SHEET_NAME = 'Zoho CRM Leads';
 
-  // Get the latest user question
   const lastQuestion = messages[messages.length - 1]?.content?.toLowerCase() || '';
 
-  // Key columns to show in relevant rows (avoids sending 200+ cols to GPT)
   const KEY_COLUMNS = [
     'First Name',
     'Last Name',
@@ -62,7 +60,6 @@ module.exports = async function handler(req, res) {
       const dataRows = allRows.slice(1);
       const totalRecords = dataRows.length;
 
-      // Parse CSV helper
       const parseRow = (row) => {
         const cols = [];
         let current = '';
@@ -78,46 +75,50 @@ module.exports = async function handler(req, res) {
 
       const headerCols = parseRow(headers);
 
-      // Calculate global summary from ALL rows
       const industries = {};
       const leadOwners = {};
       const leadStatuses = {};
       const countries = {};
-      const leadSources = {};
       const stages = {};
       const cohorts = {};
+      const tracks = {};
+      const programs = {};
       let converted = 0;
       let revenueGenerating = 0;
+      let femaleFounders = 0;
 
       const parsedRows = dataRows.map(row => {
         const cols = parseRow(row);
         const obj = {};
         headerCols.forEach((h, i) => { obj[h] = cols[i] || ''; });
-        // Pre-compute lowercase text for fast case-insensitive search
         obj._searchText = Object.values(obj).join(' ').toLowerCase();
         return obj;
       });
 
       parsedRows.forEach(row => {
-        const industry = row['Industry'] || row['Startup Industry'] || '';
+        const industry = row['Industry - a'] || '';
         const owner = row['Lead Owner'] || '';
         const status = row['Lead Status'] || '';
-        const country = row['Country'] || row['Country Of Residence'] || '';
-        const source = row['Lead Source'] || '';
-        const isConverted = row['Is Converted'] || '';
-        const stage = row['Stage'] || '';
+        const country = row['Country Of Residence'] || '';
+        const stage = row['Startup Stage'] || '';
         const cohort = row['Cohort'] || '';
-        const revenue = row['Generating Revenue'] || '';
+        const revenue = row['Generating revenue - a'] || '';
+        const isConverted = row['Is Converted'] || '';
+        const track = row['Track'] || '';
+        const program = row['Program'] || '';
+        const female = row['Female Founders'] || '';
 
         if (industry) industries[industry] = (industries[industry] || 0) + 1;
         if (owner) leadOwners[owner] = (leadOwners[owner] || 0) + 1;
         if (status) leadStatuses[status] = (leadStatuses[status] || 0) + 1;
         if (country) countries[country] = (countries[country] || 0) + 1;
-        if (source) leadSources[source] = (leadSources[source] || 0) + 1;
         if (stage) stages[stage] = (stages[stage] || 0) + 1;
         if (cohort) cohorts[cohort] = (cohorts[cohort] || 0) + 1;
+        if (track) tracks[track] = (tracks[track] || 0) + 1;
+        if (program) programs[program] = (programs[program] || 0) + 1;
         if (isConverted === 'true' || isConverted === 'TRUE') converted++;
-        if (revenue === 'true' || revenue === 'TRUE' || revenue === 'Yes' || revenue === 'yes') revenueGenerating++;
+        if (revenue === 'true' || revenue === 'TRUE' || revenue === 'Yes' || revenue === 'yes' || revenue === '1') revenueGenerating++;
+        if (female === 'true' || female === 'TRUE' || female === 'Yes' || female === 'yes' || female === '1') femaleFounders++;
       });
 
       const fmt = (obj, limit = 10) =>
@@ -128,14 +129,16 @@ IPARK ZOHO CRM LIVE SUMMARY (${totalRecords} total records):
 - Industries: ${fmt(industries) || 'N/A'}
 - Lead Owners: ${fmt(leadOwners) || 'N/A'}
 - Lead Statuses: ${fmt(leadStatuses, 20) || 'N/A'}
-- Countries: ${fmt(countries) || 'N/A'}
+- Countries of Residence: ${fmt(countries) || 'N/A'}
 - Startup Stages: ${fmt(stages) || 'N/A'}
 - Cohorts: ${fmt(cohorts, 20) || 'N/A'}
+- Tracks: ${fmt(tracks) || 'N/A'}
+- Programs: ${fmt(programs) || 'N/A'}
 - Converted Leads: ${converted}
 - Revenue-Generating Startups: ${revenueGenerating}
+- Startups with Female Founders: ${femaleFounders}
       `.trim();
 
-      // Smart search — find relevant rows based on question keywords
       const stopWords = new Set([
         'what', 'how', 'many', 'does', 'have', 'show', 'tell', 'about',
         'ipark', 'startup', 'startups', 'lead', 'leads', 'list', 'give',
@@ -145,8 +148,8 @@ IPARK ZOHO CRM LIVE SUMMARY (${totalRecords} total records):
 
       const keywords = lastQuestion
         .split(/\s+/)
-        .map(w => w.replace(/[^a-z0-9]/g, ''))  // strip punctuation
-        .filter(w => w.length > 2)               // min 3 chars (catches UAE, etc.)
+        .map(w => w.replace(/[^a-z0-9]/g, ''))
+        .filter(w => w.length > 2)
         .filter(w => !stopWords.has(w));
 
       let relevantRows = [];
@@ -156,23 +159,18 @@ IPARK ZOHO CRM LIVE SUMMARY (${totalRecords} total records):
         ).slice(0, 30);
       }
 
-      // Build relevant rows context using only KEY_COLUMNS
       let relevantContext = '';
       if (relevantRows.length > 0) {
-        // Only include key columns that actually exist in the sheet (exclude internal _searchText)
         const availableCols = KEY_COLUMNS.filter(col => headerCols.includes(col));
-
         const relevantCsv = [
           availableCols.join(','),
           ...relevantRows.map(row =>
             availableCols.map(h => {
               const val = row[h] || '';
-              // Quote values that contain commas
               return val.includes(',') ? `"${val}"` : val;
             }).join(',')
           )
         ].join('\n');
-
         relevantContext = `\n\nRELEVANT RECORDS MATCHING YOUR QUERY (${relevantRows.length} found):\n${relevantCsv}`;
       }
 
@@ -190,8 +188,8 @@ ${sheetContext}
 
 Guidelines:
 - Answer like a database analyst: give exact numbers, lists, and breakdowns whenever possible
-- Always cite which fields and filters you used to reach your answer (e.g. "Based on the Stage and Country fields...")
-- When listing startups or people, always show: Lead Name, Organization/Company/Startup, Stage, Country, and any other relevant fields
+- Always cite which fields and filters you used to reach your answer (e.g. "Based on the Startup Stage and Country Of Residence fields...")
+- When listing startups or people, always show: Lead Name, Startup Name - a, Organization/Company/Startup, Startup Stage, Country Of Residence, and any other relevant fields
 - If a question requires data not in the summary or matched records, say so explicitly and suggest how to refine the query
 - For multi-filter questions, apply all filters you can and state clearly what you filtered on
 - Keep answers structured — use bullet points or tables for lists of records
