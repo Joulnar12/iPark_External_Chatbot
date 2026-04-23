@@ -90,6 +90,8 @@ module.exports = async function handler(req, res) {
         const cols = parseRow(row);
         const obj = {};
         headerCols.forEach((h, i) => { obj[h] = cols[i] || ''; });
+        // Pre-compute lowercase text for fast case-insensitive search
+        obj._searchText = Object.values(obj).join(' ').toLowerCase();
         return obj;
       });
 
@@ -135,26 +137,26 @@ IPARK ZOHO CRM LIVE SUMMARY (${totalRecords} total records):
         'what', 'how', 'many', 'does', 'have', 'show', 'tell', 'about',
         'ipark', 'startup', 'startups', 'lead', 'leads', 'list', 'give',
         'find', 'which', 'that', 'with', 'from', 'this', 'there', 'their',
-        'are', 'the', 'and', 'for', 'you', 'can', 'all'
+        'are', 'the', 'and', 'for', 'you', 'can', 'all', 'names', 'name'
       ]);
 
       const keywords = lastQuestion
         .split(/\s+/)
-        .filter(w => w.length > 3)
+        .map(w => w.replace(/[^a-z0-9]/g, ''))  // strip punctuation
+        .filter(w => w.length > 2)               // min 3 chars (catches UAE, etc.)
         .filter(w => !stopWords.has(w));
 
       let relevantRows = [];
       if (keywords.length > 0) {
-        relevantRows = parsedRows.filter(row => {
-          const rowText = Object.values(row).join(' ').toLowerCase();
-          return keywords.some(kw => rowText.includes(kw));
-        }).slice(0, 30); // max 30 matching rows
+        relevantRows = parsedRows.filter(row =>
+          keywords.some(kw => row._searchText.includes(kw))
+        ).slice(0, 30);
       }
 
       // Build relevant rows context using only KEY_COLUMNS
       let relevantContext = '';
       if (relevantRows.length > 0) {
-        // Only include key columns that actually exist in the sheet
+        // Only include key columns that actually exist in the sheet (exclude internal _searchText)
         const availableCols = KEY_COLUMNS.filter(col => headerCols.includes(col));
 
         const relevantCsv = [
