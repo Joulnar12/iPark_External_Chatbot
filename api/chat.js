@@ -56,8 +56,8 @@ module.exports = async function handler(req, res) {
     if (sheetRes.ok) {
       const csv = await sheetRes.text();
       const allRows = csv.split('\n').filter(r => r.trim());
-      const headers = allRows[0];
-      const dataRows = allRows.slice(1);
+      const headers = allRows[1];
+      const dataRows = allRows.slice(2);
       const totalRecords = dataRows.length;
 
       const parseRow = (row) => {
@@ -96,6 +96,7 @@ module.exports = async function handler(req, res) {
       });
 
       parsedRows.forEach(row => {
+        // Using YOUR verified column names
         const industry = row['Industry - a'] || '';
         const owner = row['Lead Owner'] || '';
         const status = row['Lead Status'] || '';
