@@ -8,7 +8,7 @@ module.exports = async function handler(req, res) {
   if (!apiKey) return res.status(500).json({ error: 'API key not configured' });
 
   const SHEET_ID = '1A1ZX47YDtwENEfa6N35VgSLgT3579OHBYlhQ-ovSCeo';
-  const SHEET_NAME = 'Zoho CRM Leads';
+  const GID = '490775383';
 
   const lastQuestion = messages[messages.length - 1]?.content?.toLowerCase() || '';
 
@@ -50,27 +50,24 @@ module.exports = async function handler(req, res) {
 
   let sheetContext = '';
   try {
-    const sheetUrl = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(SHEET_NAME)}`;
+    // Use gid param + TSV format to get the correct sheet tab
+    const sheetUrl = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=tsv&gid=${GID}`;
     const sheetRes = await fetch(sheetUrl);
 
     if (sheetRes.ok) {
-      const csv = await sheetRes.text();
-      const allRows = csv.split('\n').filter(r => r.trim());
+      const tsv = await sheetRes.text();
+
+      // Split into rows, remove empty lines
+      const allRows = tsv.split('\n').filter(r => r.trim());
+
+      // Row 0 = title row ("Zoho CRM Import..."), Row 1 = headers, Row 2+ = data
       const headers = allRows[1];
       const dataRows = allRows.slice(2);
       const totalRecords = dataRows.length;
 
+      // Parse TSV row into array of values
       const parseRow = (row) => {
-        const cols = [];
-        let current = '';
-        let inQuotes = false;
-        for (const char of row) {
-          if (char === '"') inQuotes = !inQuotes;
-          else if (char === ',' && !inQuotes) { cols.push(current.trim().replace(/^"|"$/g, '')); current = ''; }
-          else current += char;
-        }
-        cols.push(current.trim().replace(/^"|"$/g, ''));
-        return cols;
+        return row.split('\t').map(col => col.trim().replace(/^"|"$/g, ''));
       };
 
       const headerCols = parseRow(headers);
@@ -96,7 +93,6 @@ module.exports = async function handler(req, res) {
       });
 
       parsedRows.forEach(row => {
-        // Using YOUR verified column names
         const industry = row['Industry - a'] || '';
         const owner = row['Lead Owner'] || '';
         const status = row['Lead Status'] || '';
@@ -109,7 +105,12 @@ module.exports = async function handler(req, res) {
         const program = row['Program'] || '';
         const female = row['Female Founders'] || '';
 
-        if (industry) industries[industry] = (industries[industry] || 0) + 1;
+        if (industry) {
+          // Industry - a can have multiple values like "HealthTech, B2B SaaS"
+          industry.split(',').map(i => i.trim()).filter(Boolean).forEach(ind => {
+            industries[ind] = (industries[ind] || 0) + 1;
+          });
+        }
         if (owner) leadOwners[owner] = (leadOwners[owner] || 0) + 1;
         if (status) leadStatuses[status] = (leadStatuses[status] || 0) + 1;
         if (country) countries[country] = (countries[country] || 0) + 1;
@@ -163,22 +164,21 @@ IPARK ZOHO CRM LIVE SUMMARY (${totalRecords} total records):
       let relevantContext = '';
       if (relevantRows.length > 0) {
         const availableCols = KEY_COLUMNS.filter(col => headerCols.includes(col));
-        const relevantCsv = [
-          availableCols.join(','),
+        const relevantTsv = [
+          availableCols.join('\t'),
           ...relevantRows.map(row =>
-            availableCols.map(h => {
-              const val = row[h] || '';
-              return val.includes(',') ? `"${val}"` : val;
-            }).join(',')
+            availableCols.map(h => (row[h] || '').replace(/\t/g, ' ')).join('\t')
           )
         ].join('\n');
-        relevantContext = `\n\nRELEVANT RECORDS MATCHING YOUR QUERY (${relevantRows.length} found):\n${relevantCsv}`;
+        relevantContext = `\n\nRELEVANT RECORDS MATCHING YOUR QUERY (${relevantRows.length} found):\n${relevantTsv}`;
       }
 
       sheetContext = globalSummary + relevantContext;
+    } else {
+      sheetContext = `Sheet fetch failed: ${sheetRes.status} ${sheetRes.statusText}`;
     }
   } catch (e) {
-    sheetContext = 'Live data temporarily unavailable.';
+    sheetContext = `Live data temporarily unavailable: ${e.message}`;
   }
 
   const systemPrompt = `You are iPark's intelligent CRM data assistant for the Talal and Madiha Zein AUB Innovation Park in Beirut, Lebanon.
