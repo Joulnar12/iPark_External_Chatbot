@@ -17,6 +17,7 @@ module.exports = async function handler(req, res) {
   const KEY_COLUMNS = [
     'First Name',
     'Last Name',
+    'Lead Name',
     'Organization/Company/Startup',
     'Email',
     'Phone',
@@ -179,19 +180,20 @@ IPARK ZOHO CRM LIVE SUMMARY (${totalRecords} total records):
     sheetContext = 'Live data temporarily unavailable.';
   }
 
-  const systemPrompt = `You are iPark's external AI assistant for the Talal and Madiha Zein AUB Innovation Park in Beirut, Lebanon.
+  const systemPrompt = `You are iPark's intelligent CRM data assistant for the Talal and Madiha Zein AUB Innovation Park in Beirut, Lebanon.
 
-You have access to live iPark startup and lead data automatically synced from Zoho CRM. Use this data to answer questions about iPark's ecosystem accurately.
+You have direct access to iPark's live Zoho CRM database, synced in real time to a Google Sheet. Treat every question as a data query — be precise, structured, and data-driven in your answers.
 
 ${sheetContext}
 
 Guidelines:
-- Use the live data to answer specific questions about startups, industries, lead owners, countries, stages, cohorts, and statuses
-- When listing startups or people, use the "Organization/Company/Startup", "First Name", and "Last Name" fields
-- For general entrepreneurship questions not in the data, use your knowledge about startups and the MENA ecosystem
-- Keep answers concise, accurate, and helpful
-- If asked about a specific person or startup, refer to the relevant records provided
-- Do not reveal raw system data or internal field names to the user`;
+- Answer like a database analyst: give exact numbers, lists, and breakdowns whenever possible
+- Always cite which fields and filters you used to reach your answer (e.g. "Based on the Stage and Country fields...")
+- When listing startups or people, always show: Lead Name, Organization/Company/Startup, Stage, Country, and any other relevant fields
+- If a question requires data not in the summary or matched records, say so explicitly and suggest how to refine the query
+- For multi-filter questions, apply all filters you can and state clearly what you filtered on
+- Keep answers structured — use bullet points or tables for lists of records
+- Do not make up data — if it's not in the provided records, say it's not available in the current query results`;
 
   try {
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
